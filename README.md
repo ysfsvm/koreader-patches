@@ -49,19 +49,22 @@ Adds a tab bar at the bottom of the File Manager with configurable tabs:
 
 | Tab | Action | Default |
 |---|---|---|
-| **Books** | Opens the file browser Home folder | On |
-| **Manga** | Opens [Rakuyomi](https://github.com/tachibana-shin/rakuyomi) | On |
-| **News** | Opens [QuickRSS](https://github.com/qewer33/QuickRSS) | On |
+| **Books** | Navigates to Home folder (page 1) | Always on |
+| **Manga** | Opens [Rakuyomi](https://github.com/tachibana-shin/rakuyomi) or a folder | On |
+| **News** | Opens [QuickRSS](https://github.com/qewer33/QuickRSS) or a folder | On |
 | **Continue** | Reopens the last read document | On |
 | **History** | Opens reading history | Off |
 | **Favorites** | Opens favorites collection | Off |
 | **Collections** | Opens collections list | Off |
 
-The active tab is highlighted with a bold label and underline (technically only the Books tab is ever highlighted since the bar isn't visible on other views). Tabs for uninstalled plugins show an info message when tapped.
+The active tab is highlighted with a bold label and underline. The active tab automatically switches when navigating between configured folders (e.g. browsing into the Manga folder activates the Manga tab). Tabs for uninstalled plugins show an info message when tapped.
 
 **Features:**
 - Settings menu under **File Browser > Navbar settings**
-- **Tabs** submenu: toggle individual tabs, drag to reorder
+- **Tabs** submenu: toggle individual tabs, drag to reorder, configure per-tab settings
+- Configurable Books tab label (Books, Home, Library, or custom)
+- Manga and News tabs can be set to open a folder instead of their default plugin
+- Active tab auto-switches based on the current folder path
 - Option to disable labels (icons only)
 - Optional top border line
 - Optional colored active tab (icon, label, and underline in configurable color, blue by default)

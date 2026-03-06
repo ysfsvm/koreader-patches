@@ -47,6 +47,10 @@ local config_default = {
     show_labels = true,
     show_top_border = true,
     books_label = "Books",
+    manga_action = "rakuyomi",
+    manga_folder = "",
+    news_action = "quickrss",
+    news_folder = "",
     colored = false,
     active_tab_color = {0x33, 0x99, 0xFF}, -- blue
 }
@@ -133,6 +137,22 @@ for _, tab in ipairs(tabs) do
     tabs_by_id[tab.id] = tab
 end
 
+-- === Active tab tracking ===
+
+local active_tab = "books"
+
+-- Forward declaration; defined later
+local injectNavbar
+
+local function setActiveTab(id)
+    active_tab = id
+    local fm = FileManager.instance
+    if fm then
+        injectNavbar(fm)
+        UIManager:setDirty(fm, "ui")
+    end
+end
+
 -- === Tab callbacks ===
 
 local function onTabBooks()
@@ -147,7 +167,20 @@ end
 local function onTabManga()
     local fm = FileManager.instance
     if not fm then return end
-    -- Access rakuyomi plugin via registered module
+
+    if config.manga_action == "folder" and config.manga_folder ~= "" then
+        if lfs.attributes(config.manga_folder, "mode") == "directory" then
+            fm.file_chooser:changeToPath(config.manga_folder)
+        else
+            local InfoMessage = require("ui/widget/infomessage")
+            UIManager:show(InfoMessage:new{
+                text = _("Manga folder not found: ") .. config.manga_folder,
+            })
+        end
+        return
+    end
+
+    -- Default: open Rakuyomi
     local rakuyomi = fm.rakuyomi
     if rakuyomi then
         rakuyomi:openLibraryView()
@@ -160,7 +193,22 @@ local function onTabManga()
 end
 
 local function onTabNews()
-    -- Try to load QuickRSS feed view directly (plugin adds its path to package.path)
+    local fm = FileManager.instance
+    if not fm then return end
+
+    if config.news_action == "folder" and config.news_folder ~= "" then
+        if lfs.attributes(config.news_folder, "mode") == "directory" then
+            fm.file_chooser:changeToPath(config.news_folder)
+        else
+            local InfoMessage = require("ui/widget/infomessage")
+            UIManager:show(InfoMessage:new{
+                text = _("News folder not found: ") .. config.news_folder,
+            })
+        end
+        return
+    end
+
+    -- Default: open QuickRSS
     local ok, QuickRSSUI = pcall(require, "modules/ui/feed_view")
     if ok and QuickRSSUI then
         UIManager:show(QuickRSSUI:new{})
@@ -419,7 +467,6 @@ local function createNavBar()
     if #visible_tabs == 0 then return nil end
 
     local screen_w = Screen:getWidth()
-    local active_tab = "books"
     local inner_w = screen_w - navbar_h_padding * 2
     local tab_w = math.floor(inner_w / #visible_tabs)
 
@@ -484,8 +531,13 @@ local function createNavBar()
         local tap_x = ges.pos.x - navbar_h_padding
         local idx = math.floor(tap_x / tab_w) + 1
         idx = math.max(1, math.min(#visible_tabs, idx))
-        local cb = tab_callbacks[visible_tabs[idx].id]
+        local tapped_id = visible_tabs[idx].id
+        local cb = tab_callbacks[tapped_id]
         if cb then cb() end
+        -- Update active tab highlight for tabs that stay in file browser
+        if tapped_id ~= active_tab then
+            setActiveTab(tapped_id)
+        end
         return true
     end
 
@@ -511,10 +563,52 @@ function Menu:init()
     orig_menu_init(self)
 end
 
+-- === Auto-switch active tab on folder change ===
+
+local orig_onPathChanged = FileManager.onPathChanged
+
+function FileManager:onPathChanged(path)
+    if orig_onPathChanged then
+        orig_onPathChanged(self, path)
+    end
+
+    local function startsWith(str, prefix)
+        return str:sub(1, #prefix) == prefix
+    end
+
+    local new_tab
+    -- Check manga folder
+    if config.manga_action == "folder" and config.manga_folder ~= "" then
+        if path == config.manga_folder or startsWith(path, config.manga_folder .. "/") then
+            new_tab = "manga"
+        end
+    end
+    -- Check news folder
+    if not new_tab and config.news_action == "folder" and config.news_folder ~= "" then
+        if path == config.news_folder or startsWith(path, config.news_folder .. "/") then
+            new_tab = "news"
+        end
+    end
+    -- Check home dir for books
+    if not new_tab then
+        local home_dir = G_reader_settings:readSetting("home_dir")
+                         or require("apps/filemanager/filemanagerutil").getDefaultDir()
+        if path == home_dir or startsWith(path, home_dir .. "/") then
+            new_tab = "books"
+        end
+    end
+
+    if new_tab and new_tab ~= active_tab then
+        active_tab = new_tab
+        injectNavbar(self)
+        UIManager:setDirty(self, "ui")
+    end
+end
+
 -- === Inject navbar INTO the existing fm_ui FrameContainer ===
 -- Deferred to run AFTER all plugins (coverbrowser etc.) finish init
 
-local function injectNavbar(fm)
+injectNavbar = function(fm)
     local fm_ui = fm[1]            -- FrameContainer wrapping file_chooser
     if not fm_ui then return end
 
@@ -558,7 +652,7 @@ local orig_setupLayout = FileManager.setupLayout
 function FileManager:setupLayout()
     orig_setupLayout(self)
 
-    -- On reinit, re-inject immediately (coverbrowser already done)
+    -- On reinit, re-inject (preserve active tab)
     self._navbar_injected = false
 
     -- Defer injection to after all init processing completes
@@ -582,81 +676,6 @@ function FileManagerMenu:setUpdateItemTable()
     self.menu_items.navbar_settings = {
         text = _("Navbar settings"),
         sub_item_table = {
-            {
-                text_func = function()
-                    return _("Books tab label: ") .. getBooksLabel()
-                end,
-                sub_item_table = {
-                    {
-                        text = _("Books"),
-                        checked_func = function() return config.books_label == "Books" or config.books_label == "" end,
-                        callback = function()
-                            config.books_label = "Books"
-                            G_reader_settings:saveSetting("bottom_navbar", config)
-                        end,
-                    },
-                    {
-                        text = _("Home"),
-                        checked_func = function() return config.books_label == "Home" end,
-                        callback = function()
-                            config.books_label = "Home"
-                            G_reader_settings:saveSetting("bottom_navbar", config)
-                        end,
-                    },
-                    {
-                        text = _("Library"),
-                        checked_func = function() return config.books_label == "Library" end,
-                        callback = function()
-                            config.books_label = "Library"
-                            G_reader_settings:saveSetting("bottom_navbar", config)
-                        end,
-                    },
-                    {
-                        text_func = function()
-                            local presets = {[""] = true, Books = true, Home = true, Library = true}
-                            if presets[config.books_label] then
-                                return _("Custom")
-                            end
-                            return _("Custom: ") .. config.books_label
-                        end,
-                        checked_func = function()
-                            local presets = {[""] = true, Books = true, Home = true, Library = true}
-                            return not presets[config.books_label]
-                        end,
-                        keep_menu_open = true,
-                        callback = function(touchmenu_instance)
-                            local InputDialog = require("ui/widget/inputdialog")
-                            local dlg
-                            dlg = InputDialog:new{
-                                title = _("Books tab label"),
-                                input = config.books_label,
-                                buttons = {{
-                                    {
-                                        text = _("Cancel"),
-                                        id = "close",
-                                        callback = function() UIManager:close(dlg) end,
-                                    },
-                                    {
-                                        text = _("Set"),
-                                        is_enter_default = true,
-                                        callback = function()
-                                            local text = dlg:getInputText()
-                                            config.books_label = text ~= "" and text or "Books"
-                                            G_reader_settings:saveSetting("bottom_navbar", config)
-                                            UIManager:close(dlg)
-                                            if touchmenu_instance then
-                                                touchmenu_instance:updateItems()
-                                            end
-                                        end,
-                                    },
-                                }},
-                            }
-                            UIManager:show(dlg)
-                            dlg:onShowKeyboard()
-                        end,
-                    },
-                },
-            },
             {
                 text = _("Show labels"),
                 checked_func = function() return config.show_labels end,
@@ -687,7 +706,6 @@ function FileManagerMenu:setUpdateItemTable()
                     {
                         text = _("Arrange tabs"),
                         keep_menu_open = true,
-                        separator = true,
                         callback = function()
                             local SortWidget = require("ui/widget/sortwidget")
                             local sort_items = {}
@@ -714,6 +732,82 @@ function FileManagerMenu:setUpdateItemTable()
                         end,
                     },
                     {
+                        text_func = function()
+                            return _("Books tab label: ") .. getBooksLabel()
+                        end,
+                        separator = true,
+                        sub_item_table = {
+                            {
+                                text = _("Books"),
+                                checked_func = function() return config.books_label == "Books" or config.books_label == "" end,
+                                callback = function()
+                                    config.books_label = "Books"
+                                    G_reader_settings:saveSetting("bottom_navbar", config)
+                                end,
+                            },
+                            {
+                                text = _("Home"),
+                                checked_func = function() return config.books_label == "Home" end,
+                                callback = function()
+                                    config.books_label = "Home"
+                                    G_reader_settings:saveSetting("bottom_navbar", config)
+                                end,
+                            },
+                            {
+                                text = _("Library"),
+                                checked_func = function() return config.books_label == "Library" end,
+                                callback = function()
+                                    config.books_label = "Library"
+                                    G_reader_settings:saveSetting("bottom_navbar", config)
+                                end,
+                            },
+                            {
+                                text_func = function()
+                                    local presets = {[""] = true, Books = true, Home = true, Library = true}
+                                    if presets[config.books_label] then
+                                        return _("Custom")
+                                    end
+                                    return _("Custom: ") .. config.books_label
+                                end,
+                                checked_func = function()
+                                    local presets = {[""] = true, Books = true, Home = true, Library = true}
+                                    return not presets[config.books_label]
+                                end,
+                                keep_menu_open = true,
+                                callback = function(touchmenu_instance)
+                                    local InputDialog = require("ui/widget/inputdialog")
+                                    local dlg
+                                    dlg = InputDialog:new{
+                                        title = _("Books tab label"),
+                                        input = config.books_label,
+                                        buttons = {{
+                                            {
+                                                text = _("Cancel"),
+                                                id = "close",
+                                                callback = function() UIManager:close(dlg) end,
+                                            },
+                                            {
+                                                text = _("Set"),
+                                                is_enter_default = true,
+                                                callback = function()
+                                                    local text = dlg:getInputText()
+                                                    config.books_label = text ~= "" and text or "Books"
+                                                    G_reader_settings:saveSetting("bottom_navbar", config)
+                                                    UIManager:close(dlg)
+                                                    if touchmenu_instance then
+                                                        touchmenu_instance:updateItems()
+                                                    end
+                                                end,
+                                            },
+                                        }},
+                                    }
+                                    UIManager:show(dlg)
+                                    dlg:onShowKeyboard()
+                                end,
+                            },
+                        },
+                    },
+                    {
                         text = _("Manga"),
                         checked_func = function() return config.show_tabs.manga end,
                         callback = function()
@@ -722,12 +816,112 @@ function FileManagerMenu:setUpdateItemTable()
                         end,
                     },
                     {
+                        text_func = function()
+                            if config.manga_action == "folder" then
+                                return _("Manga tab action: ") .. _("Folder")
+                            end
+                            return _("Manga tab action: ") .. _("Rakuyomi")
+                        end,
+                        separator = true,
+                        sub_item_table = {
+                            {
+                                text = _("Open Rakuyomi"),
+                                checked_func = function() return config.manga_action ~= "folder" end,
+                                callback = function()
+                                    config.manga_action = "rakuyomi"
+                                    G_reader_settings:saveSetting("bottom_navbar", config)
+                                end,
+                            },
+                            {
+                                text_func = function()
+                                    if config.manga_action == "folder" and config.manga_folder ~= "" then
+                                        local util = require("util")
+                                        local _dir, folder_name = util.splitFilePathName(config.manga_folder)
+                                        return _("Open folder: ") .. folder_name
+                                    end
+                                    return _("Open folder")
+                                end,
+                                checked_func = function() return config.manga_action == "folder" end,
+                                keep_menu_open = true,
+                                callback = function(touchmenu_instance)
+                                    local PathChooser = require("ui/widget/pathchooser")
+                                    local start_path = config.manga_folder ~= "" and config.manga_folder
+                                        or G_reader_settings:readSetting("lastdir") or "/"
+                                    local path_chooser = PathChooser:new{
+                                        select_file = false,
+                                        show_files = false,
+                                        path = start_path,
+                                        onConfirm = function(dir_path)
+                                            config.manga_action = "folder"
+                                            config.manga_folder = dir_path
+                                            G_reader_settings:saveSetting("bottom_navbar", config)
+                                            if touchmenu_instance then
+                                                touchmenu_instance:updateItems()
+                                            end
+                                        end,
+                                    }
+                                    UIManager:show(path_chooser)
+                                end,
+                            },
+                        },
+                    },
+                    {
                         text = _("News"),
                         checked_func = function() return config.show_tabs.news end,
                         callback = function()
                             config.show_tabs.news = not config.show_tabs.news
                             G_reader_settings:saveSetting("bottom_navbar", config)
                         end,
+                    },
+                    {
+                        text_func = function()
+                            if config.news_action == "folder" then
+                                return _("News tab action: ") .. _("Folder")
+                            end
+                            return _("News tab action: ") .. _("QuickRSS")
+                        end,
+                        separator = true,
+                        sub_item_table = {
+                            {
+                                text = _("Open QuickRSS"),
+                                checked_func = function() return config.news_action ~= "folder" end,
+                                callback = function()
+                                    config.news_action = "quickrss"
+                                    G_reader_settings:saveSetting("bottom_navbar", config)
+                                end,
+                            },
+                            {
+                                text_func = function()
+                                    if config.news_action == "folder" and config.news_folder ~= "" then
+                                        local util = require("util")
+                                        local _dir, folder_name = util.splitFilePathName(config.news_folder)
+                                        return _("Open folder: ") .. folder_name
+                                    end
+                                    return _("Open folder")
+                                end,
+                                checked_func = function() return config.news_action == "folder" end,
+                                keep_menu_open = true,
+                                callback = function(touchmenu_instance)
+                                    local PathChooser = require("ui/widget/pathchooser")
+                                    local start_path = config.news_folder ~= "" and config.news_folder
+                                        or G_reader_settings:readSetting("lastdir") or "/"
+                                    local path_chooser = PathChooser:new{
+                                        select_file = false,
+                                        show_files = false,
+                                        path = start_path,
+                                        onConfirm = function(dir_path)
+                                            config.news_action = "folder"
+                                            config.news_folder = dir_path
+                                            G_reader_settings:saveSetting("bottom_navbar", config)
+                                            if touchmenu_instance then
+                                                touchmenu_instance:updateItems()
+                                            end
+                                        end,
+                                    }
+                                    UIManager:show(path_chooser)
+                                end,
+                            },
+                        },
                     },
                     {
                         text = _("Continue"),
