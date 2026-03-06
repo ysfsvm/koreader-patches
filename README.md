@@ -6,6 +6,9 @@ Here's how they look on my Kobo Libra Colour!
 
 ![photo](./assets/photo.jpeg)
 
+> [!WARNING]
+> These patches may or may not work with Project Title, I don't use it myself so compatibility is NOT tested.
+
 # Installation
 
 Drop the `.lua` files into your `koreader/patches/` directory. Place all the icons in the `icons/` folder in your KOReader `icons/` directory.
