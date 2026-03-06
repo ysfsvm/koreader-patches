@@ -15,9 +15,15 @@ Drop the `.lua` files into your `koreader/patches/` directory. Place all the ico
 
 ## Patches
 
+### Patch Settings
+
+The Titlebar and Navbar patches can be configured from their respective settings under the first KOReader menu tab.
+
+![settings](./assets/settings.png)
+
 ### 2-custom-titlebar.lua
 
-![photo](./assets/titlebar.png)
+![titlebar](./assets/titlebar.png)
 
 Replaces the default "KOReader" title with a custom status bar showing device info.
 
@@ -43,7 +49,7 @@ Replaces the default "KOReader" title with a custom status bar showing device in
 
 ### 2-custom-navbar.lua
 
-![photo](./assets/navbar.png)
+![navbar](./assets/navbar.png)
 
 Adds a tab bar at the bottom of the File Manager with configurable tabs:
 
