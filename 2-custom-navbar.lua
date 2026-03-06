@@ -534,8 +534,11 @@ local function createNavBar()
         local tapped_id = visible_tabs[idx].id
         local cb = tab_callbacks[tapped_id]
         if cb then cb() end
-        -- Update active tab highlight for tabs that stay in file browser
-        if tapped_id ~= active_tab then
+        -- Only update active tab for tabs that stay in the file browser
+        local stays_in_browser = tapped_id == "books"
+            or (tapped_id == "manga" and config.manga_action == "folder" and config.manga_folder ~= "")
+            or (tapped_id == "news" and config.news_action == "folder" and config.news_folder ~= "")
+        if stays_in_browser and tapped_id ~= active_tab then
             setActiveTab(tapped_id)
         end
         return true
