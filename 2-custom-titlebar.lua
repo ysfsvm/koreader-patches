@@ -54,6 +54,7 @@ local config_default = {
     show_time = true,
     show_bottom_border = true,
     colored = false,
+    bold_text = false,
 }
 
 local function loadConfig()
@@ -101,7 +102,12 @@ end
 
 -- === Layout constants ===
 
-local bar_font = Font:getFace("xx_smallinfofont")
+local function getBarFont()
+    if config.bold_text then
+        return Font:getFace("NotoSans-Bold.ttf", Font.sizemap["xx_smallinfofont"])
+    end
+    return Font:getFace("xx_smallinfofont")
+end
 local h_padding = Screen:scaleBySize(10)
 
 -- Disk free space cache
@@ -277,7 +283,7 @@ local item_labels = {
 local function createStatusRow()
     local left_text = TextWidget:new{
         text = getDeviceName(),
-        face = bar_font,
+        face = getBarFont(),
     }
 
     local sep = getSeparator()
@@ -292,20 +298,20 @@ local function createStatusRow()
                 if not first and sep ~= "" then
                     table.insert(right_group, TextWidget:new{
                         text = sep,
-                        face = bar_font,
+                        face = getBarFont(),
                     })
                 end
                 if use_color and color then
                     -- Icon in color, label in black
                     table.insert(right_group, ColorTextWidget:new{
                         text = icon,
-                        face = bar_font,
+                        face = getBarFont(),
                         fgcolor = color,
                     })
                     if label and label ~= "" then
                         table.insert(right_group, TextWidget:new{
                             text = label,
-                            face = bar_font,
+                            face = getBarFont(),
                         })
                     end
                 else
@@ -313,7 +319,7 @@ local function createStatusRow()
                     local text = label and (icon .. label) or icon
                     table.insert(right_group, TextWidget:new{
                         text = text,
-                        face = bar_font,
+                        face = getBarFont(),
                     })
                 end
                 first = false
@@ -348,7 +354,7 @@ local function createStatusRow()
     if config.show_time then
         local time_text = TextWidget:new{
             text = os.date("%H:%M"),
-            face = bar_font,
+            face = getBarFont(),
         }
         table.insert(row, 2, CenterContainer:new{
             dimen = Geom:new{ w = screen_w, h = row_height },
@@ -498,6 +504,14 @@ function FileManagerMenu:setUpdateItemTable()
                 checked_func = function() return config.show_bottom_border end,
                 callback = function(touchmenu_instance)
                     config.show_bottom_border = not config.show_bottom_border
+                    refresh(touchmenu_instance)
+                end,
+            },
+            {
+                text = _("Bold text"),
+                checked_func = function() return config.bold_text end,
+                callback = function(touchmenu_instance)
+                    config.bold_text = not config.bold_text
                     refresh(touchmenu_instance)
                 end,
             },
