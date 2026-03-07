@@ -42,8 +42,9 @@ local config_default = {
         history = false,
         favorites = false,
         collections = false,
+        exit = false,
     },
-    tab_order = { "books", "manga", "news", "continue", "history", "favorites", "collections" },
+    tab_order = { "books", "manga", "news", "continue", "history", "favorites", "collections", "exit" },
     show_labels = true,
     show_top_border = true,
     books_label = "Books",
@@ -135,6 +136,11 @@ local tabs = {
         id = "collections",
         label = _("Collections"),
         icon = "tab_collections",
+    },
+    {
+        id = "exit",
+        label = _("Exit"),
+        icon = "close",
     },
 }
 
@@ -263,6 +269,13 @@ local function onTabCollections()
     end
 end
 
+local function onTabExit()
+    local fm = FileManager.instance
+    if fm then
+        fm:onClose()
+    end
+end
+
 local tab_callbacks = {
     books = onTabBooks,
     manga = onTabManga,
@@ -271,6 +284,7 @@ local tab_callbacks = {
     history = onTabHistory,
     favorites = onTabFavorites,
     collections = onTabCollections,
+    exit = onTabExit,
 }
 
 -- === Color text support ===
@@ -1274,6 +1288,14 @@ function FileManagerMenu:setUpdateItemTable()
                         checked_func = function() return config.show_tabs.collections end,
                         callback = function()
                             config.show_tabs.collections = not config.show_tabs.collections
+                            G_reader_settings:saveSetting("bottom_navbar", config)
+                        end,
+                    },
+                    {
+                        text = _("Exit"),
+                        checked_func = function() return config.show_tabs.exit end,
+                        callback = function()
+                            config.show_tabs.exit = not config.show_tabs.exit
                             G_reader_settings:saveSetting("bottom_navbar", config)
                         end,
                     },
