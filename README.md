@@ -11,7 +11,8 @@ If you like these patches and want to support me, consider getting me a coffee! 
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/B0B8FQ871)
 
 > [!WARNING]
-> These patches may or may not work with Project Title, I don't use it myself so compatibility is NOT tested.
+> REGARDING **PROJECT TITLE** COMPATIBILITY
+> According to community feedback, only the **quick settings** patch works with Project Title. The other patches are reported to not work well. None of the patches guarantee any sort of Project Title compatibility as I don't use it myself.
 
 ## Installation
 
